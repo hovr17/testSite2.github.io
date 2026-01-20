@@ -3,6 +3,7 @@ console.log('place_menu.js загружен');
 
 let mode = "intro";
 let isAnimating = false;
+let hasActivatedFullscreen = false; // ✅ Флаг успешной активации
 
 // Переменные для обработки свайпов
 let touchStartX = null;
@@ -60,9 +61,11 @@ function handleFullscreenChange() {
   if (isFullscreen) {
     icon.classList.remove('fullscreen-icon');
     icon.classList.add('fullscreen-exit-icon');
+    hasActivatedFullscreen = true; // ✅ Обновляем флаг
   } else {
     icon.classList.remove('fullscreen-exit-icon');
     icon.classList.add('fullscreen-icon');
+    hasActivatedFullscreen = false; // ✅ Сбрасываем флаг при выходе
   }
 }
 
@@ -197,6 +200,62 @@ function setupSwipeHandlers() {
     let isSwipeInProgress = false;
     let initialScrollTop = 0;
     
+    // ✅ АКТИВАЦИЯ ПОЛНОЭКРАННОГО РЕЖИМА (ТОЛЬКО НА МОБИЛЬНЫХ)
+    if (window.innerWidth <= 1080) {
+        const handleFullscreenActivation = (e) => {
+            // Проверяем, активен ли уже полноэкранный режим
+            const isAlreadyFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+            
+            // ✅ Если уже в режиме — обновляем флаг и выходим
+            if (isAlreadyFullscreen) {
+                hasActivatedFullscreen = true;
+                return;
+            }
+            
+            // ✅ Если ранее активировали, но сейчас не в режиме — значит пользователь вышел
+            // Пробуем снова активировать
+            if (hasActivatedFullscreen) {
+                const target = e.target;
+                const isInteractiveElement = target.closest('a') || 
+                                           target.closest('button') || 
+                                           target.closest('.photo-card') ||
+                                           target.closest('.dropdown-arrow') ||
+                                           target.closest('#paidBtn') ||
+                                           target.closest('.back-button');
+                
+                if (!isInteractiveElement) {
+                    enterFullscreen();
+                    updateFullscreenButtonVisibility();
+                }
+                return;
+            }
+            
+            // ✅ Первый запуск — активируем
+            const target = e.target;
+            const isInteractiveElement = target.closest('a') || 
+                                       target.closest('button') || 
+                                       target.closest('.photo-card') ||
+                                       target.closest('.dropdown-arrow') ||
+                                       target.closest('#paidBtn') ||
+                                       target.closest('.back-button');
+            
+            if (!isInteractiveElement) {
+                hasActivatedFullscreen = true;
+                enterFullscreen();
+                updateFullscreenButtonVisibility();
+            }
+        };
+        
+        // Вешаем на document вместо scrollZone для надёжности
+        document.addEventListener('touchstart', handleFullscreenActivation, { passive: true });
+        
+        // 🐛 Для тестирования в devtools: если touchstart не работает, пробуем click
+        // Убрать эту строку в продакшене!
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            document.addEventListener('click', handleFullscreenActivation);
+        }
+    }
+    
     scrollZone.addEventListener("touchstart", (e) => {
         if (isAnimating || window.spaRouter?.isAnimating) return;
         
@@ -255,30 +314,27 @@ function setupSwipeHandlers() {
             if (e.cancelable) e.preventDefault();
             setMode("details");
             console.log('⬆️ Свайп вверх - открытие меню');
-       // Найдите этот блок в функции setupSwipeHandlers():
-} else if (isHorizontalSwipe && Math.abs(deltaX) > SWIPE_THRESHOLD && isSwipeInProgress) {
-    e.preventDefault();
-    
-    // Добавьте эту проверку:
-    const order = getCurrentPageOrder(window.spaRouter?.currentCategory);
-    if (order.length <= 1) {
-        console.log('🎯 В категории только одна страница, свайп не работает');
-        touchStartX = null;
-        touchStartY = null;
-        isHorizontalSwipe = false;
-        isSwipeInProgress = false;
-        return;
-    }
-    
-    // Остальной код...
-    if (deltaX > 0) {
-        console.log('➡️ Свайп вправо, переход к предыдущей странице');
-        navigateToPrevPlace();
-    } else {
-        console.log('⬅️ Свайп влево, переход к следующей странице');
-        navigateToNextPlace();
-    }
-}
+        } else if (isHorizontalSwipe && Math.abs(deltaX) > SWIPE_THRESHOLD && isSwipeInProgress) {
+            e.preventDefault();
+            
+            const order = getCurrentPageOrder(window.spaRouter?.currentCategory);
+            if (order.length <= 1) {
+                console.log('🎯 В категории только одна страница, свайп не работает');
+                touchStartX = null;
+                touchStartY = null;
+                isHorizontalSwipe = false;
+                isSwipeInProgress = false;
+                return;
+            }
+            
+            if (deltaX > 0) {
+                console.log('➡️ Свайп вправо, переход к предыдущей странице');
+                navigateToPrevPlace();
+            } else {
+                console.log('⬅️ Свайп влево, переход к следующей странице');
+                navigateToNextPlace();
+            }
+        }
         
         touchStartX = null;
         touchStartY = null;
